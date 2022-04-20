@@ -5,27 +5,53 @@ from PyQt5.QtCore import Qt
 MOUSE_THRESHOLD = 3
 
 
-class Ui(QtWidgets.QMainWindow):
+class MainWindow(QtWidgets.QMainWindow):
     def __init__(self):
-        super().__init__()
-        uic.loadUi("asdone.ui", self)
-        width = 500
-        height = 500
-        self.resize(QtCore.QSize(width, height))
+        super(MainWindow, self).__init__()
+        uic.loadUi("assets/main.ui", self)
 
+        self.imageLabel = self.findChild(QtWidgets.QLabel, "imageLabel")
+        self.show()
+        self.signWidget = SignWidget()
+        self.signWidget.update.connect(self.show_sign)
+
+
+    def show_sign(self, pixmap: QtGui.QPixmap):
+        self.imageLabel.setPixmap(pixmap)
+
+
+class SignWidget(QtWidgets.QWidget):
+    update = QtCore.pyqtSignal(QtGui.QPixmap, name="event")
+
+    def __init__(self):
+        super(SignWidget, self).__init__()
+        uic.loadUi("assets/signwidget.ui", self)
+
+        # Setup graphics view and scene
         self.graphicsView = self.findChild(QtWidgets.QGraphicsView, "graphicsView")
         self.scene = GraphicsScene(self, self.graphicsView.rect())
         self.graphicsView.setScene(self.scene)
 
-        # self.label = self.findChild(QtWidgets.QLabel, "draw_label")
-        # self.label.setScaledContents(True)
-        # self.textLabel = self.findChild(QtWidgets.QLabel, "textLabel")
-        # self.canvas = QtGui.QPixmap(100,100)
-        # self.label.setPixmap(self.canvas)
-        #
-        # self.painter = QtGui.QPainter(self.label.pixmap())
+        # setup buttons
+        self.confirmButton = self.findChild(QtWidgets.QPushButton, "confirmButton")
+        self.confirmButton.clicked.connect(self.confirm_sign)
+        self.cancelButton = self.findChild(QtWidgets.QPushButton, "cancelButton")
+        self.cancelButton.clicked.connect(self.close)
 
         self.show()
+
+    def confirm_sign(self):
+        signPixmap = QtGui.QPixmap(self.graphicsView.viewport().size())
+        pixmap = QtGui.QPixmap(signPixmap.size())
+        pixmap.fill(Qt.transparent)
+        self.graphicsView.viewport().render(signPixmap)
+        mask = signPixmap.createMaskFromColor(Qt.black, Qt.MaskOutColor)
+        painter = QtGui.QPainter(pixmap)
+        painter.setPen(Qt.black)
+        painter.drawPixmap(pixmap.rect(), mask, mask.rect())
+        painter.end()
+        self.update.emit(pixmap)
+        self.close()
 
 
 class GraphicsScene(QtWidgets.QGraphicsScene):
@@ -58,7 +84,7 @@ class GraphicsScene(QtWidgets.QGraphicsScene):
 
 def main():
     app = QtWidgets.QApplication(sys.argv)
-    window = Ui()
+    window = MainWindow()
     app.exec()
 
 

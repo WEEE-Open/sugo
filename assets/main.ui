@@ -16,9 +16,12 @@
   <widget class="QWidget" name="centralwidget">
    <layout class="QVBoxLayout" name="verticalLayout">
     <item>
-     <widget class="QLabel" name="imageLabel">
+     <widget class="QLabel" name="promptLabel">
       <property name="text">
-       <string>TextLabel</string>
+       <string>Scaraventa qui il SIR</string>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignCenter</set>
       </property>
      </widget>
     </item>
@@ -33,8 +36,20 @@
      <height>21</height>
     </rect>
    </property>
+   <widget class="QMenu" name="menuInfo">
+    <property name="title">
+     <string>Info</string>
+    </property>
+    <addaction name="action"/>
+   </widget>
+   <addaction name="menuInfo"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
+  <action name="action">
+   <property name="text">
+    <string>?</string>
+   </property>
+  </action>
  </widget>
  <resources/>
  <connections/>

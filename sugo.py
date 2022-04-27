@@ -1,7 +1,11 @@
+import io
+import shutil
 import sys
 import os
 import mimetypes
-from PyQt5 import QtCore, QtGui, QtWidgets, QtWebEngineWidgets, uic
+from math import ceil
+
+from PyQt5 import QtCore, QtGui, QtWidgets, uic
 from PyQt5.QtCore import Qt
 import pdf2image
 
@@ -14,19 +18,49 @@ class MainWindow(QtWidgets.QMainWindow):
         super(MainWindow, self).__init__()
         uic.loadUi("assets/main.ui", self)
         self.setAcceptDrops(True)
-        self.pdfViewer = None
+        self.pdfViewerWidget = None
+        self.virtualFiles = []
 
         self.promptLabel = self.findChild(QtWidgets.QLabel, "promptLabel")
-        self.imageLabel = DragAndDropLabel("assets/upload.jpg")
+
+        self.imageLabel = DragAndDropLabel("assets/upload.png")
         self.imageLabel.triggered.connect(self.load_document)
-        self.centralWidget().layout().addWidget(self.imageLabel)
+        self.centralWidget().layout().insertWidget(1, self.imageLabel)
+
         self.signWidget = SignWidget()
         self.signWidget.update.connect(self.show_sign)
+
+        self.scrollArea = self.findChild(QtWidgets.QScrollArea, "scrollArea")
+        self.scrollArea.hide()
+
+        self.setSelectionsButton = self.findChild(QtWidgets.QPushButton, "setPointsButton")
+        self.setSelectionsButton.clicked.connect(self.set_sign_areas)
+        self.setSelectionsButton.hide()
+
+        self.confirmButton = self.findChild(QtWidgets.QPushButton, "confirmButton")
+        self.confirmButton.clicked.connect(self.save_pdf)
+        self.confirmButton.hide()
+        self.cancelButton = self.findChild(QtWidgets.QPushButton, "cancelButton")
+        self.cancelButton.clicked.connect(self.reset)
+        self.cancelButton.hide()
 
         self.clearShortcut = QtWidgets.QShortcut(QtGui.QKeySequence("Ctrl+L"), self)
         self.clearShortcut.activated.connect(self.ask_sign)
 
         self.show()
+
+    def set_sign_areas(self):
+        self.pdfViewerWidget.trigger_selection()
+        if self.setSelectionsButton.text() != "Confirm sign points":
+            self.setSelectionsButton.setText("Confirm sign points")
+        else:
+            self.setSelectionsButton.setText("Set sign points")
+
+    def save_pdf(self):
+        pass
+
+    def reset(self):
+        pass
 
     def load_document(self, path: str):
         if path == "":
@@ -38,9 +72,10 @@ class MainWindow(QtWidgets.QMainWindow):
             if mtypes and 'application/pdf' in mtypes:
                 self.imageLabel.hide()
                 self.promptLabel.hide()
-                self.pdfViewer = PdfViewerEngine(path)
-                # PdfViewer(path)
-                self.centralWidget().layout().addWidget(self.pdfViewer)
+                self.pdfViewerWidget = PdfViewerWidget(path)
+                self.scrollArea.setWidget(self.pdfViewerWidget)
+                self.scrollArea.show()
+                self.setSelectionsButton.show()
 
     def ask_sign(self):
         self.signWidget.show()
@@ -82,7 +117,7 @@ class SignWidget(QtWidgets.QWidget):
 
 
 class GraphicsScene(QtWidgets.QGraphicsScene):
-    def __init__(self, parent: QtWidgets.QMainWindow, rect: QtCore.QRect):
+    def __init__(self, parent: SignWidget, rect: QtCore.QRect):
         QtWidgets.QGraphicsScene.__init__(self, parent)
         self.setSceneRect(QtCore.QRectF(rect))
 
@@ -117,7 +152,7 @@ class DragAndDropLabel(QtWidgets.QLabel):
         self.setAcceptDrops(True)
         self.setAlignment(Qt.AlignHCenter)
         pixmap = QtGui.QPixmap(image_path)
-        self.setPixmap(pixmap.scaledToWidth(500, Qt.SmoothTransformation))
+        self.setPixmap(pixmap.scaledToWidth(100, Qt.SmoothTransformation))
 
     def mousePressEvent(self, ev: QtGui.QMouseEvent) -> None:
         self.triggered.emit("")
@@ -127,23 +162,114 @@ class DragAndDropLabel(QtWidgets.QLabel):
 
     def dropEvent(self, a0: QtGui.QDropEvent) -> None:
         a0.acceptProposedAction()
-        self.triggered.emit(a0.mimeData().text().lstrip("file:///"))
+        self.triggered.emit(f'/{a0.mimeData().text().lstrip("file://")}')
 
 
-class PdfViewer(QtWidgets.QScrollArea):
+class PdfViewerWidget(QtWidgets.QWidget):
     def __init__(self, path: str):
-        super(PdfViewer, self).__init__()
-        self.pdfPages = pdf2image.convert_from_path(path)
+        super(PdfViewerWidget, self).__init__()
+        self.mainLayout = QtWidgets.QVBoxLayout()
+        self.pages = pdf2image.convert_from_path(path, 200)
+        self.setSizePolicy(QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Minimum)
+
+        if not os.path.isdir("tmp"):
+            os.mkdir("tmp")
+
+        for idx, page in enumerate(self.pages):
+            virtual_file = io.BytesIO()
+            page.save(virtual_file, 'PNG')
+            virtual_file.seek(0)
+            virtual_file = virtual_file.read()
+            scene = PageGraphicsScene(self, virtual_file, idx)
+            gview = PageGraphicsView(scene)
+            self.mainLayout.addWidget(gview)
+
+        self.setLayout(self.mainLayout)
+
+    def trigger_selection(self):
+        gviews = self.findChildren(PageGraphicsView)
+        for gview in gviews:
+            scene = gview.scene
+            scene.trigger_selection()
 
 
-class PdfViewerEngine(QtWebEngineWidgets.QWebEngineView):
-    def __init__(self, path: str):
-        super(PdfViewerEngine, self).__init__()
-        self.settings().setAttribute(QtWebEngineWidgets.QWebEngineSettings.PluginsEnabled, True)
-        self.load(QtCore.QUrl.fromLocalFile(path))
+class PageGraphicsView(QtWidgets.QGraphicsView):
+    def __init__(self, scene: QtWidgets.QGraphicsScene):
+        super(PageGraphicsView, self).__init__()
+        self.scene = scene
+
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.setSizePolicy(QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Fixed)
+        self.setScene(self.scene)
+        self.setMinimumHeight(ceil(self.scene.height()))
+
+
+class PageGraphicsScene(QtWidgets.QGraphicsScene):
+    def __init__(self, parent: QtWidgets.QWidget, image_bytes: bytes, page_number: int):
+        super(PageGraphicsScene, self).__init__()
+        self.parent = parent
+        self.image = QtGui.QImage()
+        self.page_number = page_number
+        self.selectionFlag = False
+        self.rubberBand = None
+        self.mouse_origin = None
+        self.mouse_end = None
+        self.rect_fields = []
+
+        self.image.loadFromData(image_bytes)
+        pixmap = QtGui.QPixmap(self.image)
+        pixmap = QtWidgets.QGraphicsPixmapItem(pixmap.scaledToWidth(self.parent.width(), Qt.SmoothTransformation))
+        self.addItem(pixmap)
+
+    def mousePressEvent(self, event: 'QGraphicsSceneMouseEvent') -> None:
+        # print(f"page: {self.page_number}, coord: {event.scenePos()}")
+        if self.selectionFlag:
+            self.mouse_origin = self.views()[0].mapFromScene(event.scenePos().toPoint())
+            if self.rubberBand is None:
+                self.rubberBand = QtWidgets.QRubberBand(QtWidgets.QRubberBand.Rectangle, self.views()[0])
+            else:
+                return
+            self.rubberBand.setGeometry(QtCore.QRect(self.mouse_origin, QtCore.QSize()))
+            self.rubberBand.show()
+
+    def mouseMoveEvent(self, event: 'QGraphicsSceneMouseEvent') -> None:
+        if self.selectionFlag and self.rubberBand is not None:
+            self.mouse_end = self.views()[0].mapFromScene(event.scenePos().toPoint())
+            self.rubberBand.setGeometry(self.improved_rect(self.mouse_origin, self.mouse_end).toRect())
+
+    def mouseReleaseEvent(self, event: 'QGraphicsSceneMouseEvent') -> None:
+        if self.selectionFlag and self.rubberBand is not None:
+            self.rubberBand.hide()
+            self.rubberBand = None
+            origin = self.views()[0].mapToScene(self.mouse_origin)
+            end = self.views()[0].mapToScene(self.mouse_end)
+            self.rect_fields.append([self.page_number,
+                                     self.addRect(self.improved_rect(origin, end),
+                                                  brush=QtGui.QBrush(QtGui.QColor(0x0, 0x98, 0x3A, 120)))
+                                     ])
+
+    @staticmethod
+    def improved_rect(p1: QtCore.QPointF, p2: QtCore.QPointF):
+        x_min = min(p1.x(), p2.x())
+        x_max = max(p1.x(), p2.x())
+        y_min = min(p1.y(), p2.y())
+        y_max = max(p1.y(), p2.y())
+        return QtCore.QRectF(QtCore.QPointF(x_min, y_min), QtCore.QPointF(x_max, y_max))
+    
+    def trigger_selection(self):
+        if self.selectionFlag:
+            self.selectionFlag = False
+        else:
+            self.selectionFlag = True
+            for item in self.items():
+                if isinstance(item, QtWidgets.QGraphicsRectItem):
+                    self.removeItem(item)
+            self.rect_fields.clear()
 
 
 def main():
+    if os.path.isdir("tmp"):
+        shutil.rmtree("tmp")
     app = QtWidgets.QApplication(sys.argv)
     window = MainWindow()
     app.exec()

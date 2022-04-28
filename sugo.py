@@ -3,12 +3,13 @@ import shutil
 import sys
 import os
 import mimetypes
+import pdf2image
+from PIL import Image
+from pathlib import Path
 from math import ceil
-
 from PyQt5 import QtCore, QtGui, QtWidgets, uic
 from PyQt5.QtCore import Qt
-import pdf2image
-
+from PyQt5.QtWidgets import QGraphicsSceneMouseEvent
 
 MOUSE_THRESHOLD = 3
 
@@ -20,6 +21,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setAcceptDrops(True)
         self.pdfViewerWidget = None
         self.virtualFiles = []
+        self.pdf_path = None
 
         self.promptLabel = self.findChild(QtWidgets.QLabel, "promptLabel")
 
@@ -28,7 +30,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.centralWidget().layout().insertWidget(1, self.imageLabel)
 
         self.signWidget = SignWidget()
-        self.signWidget.update.connect(self.show_sign)
+        self.signWidget.update.connect(self.insert_signature)
 
         self.scrollArea = self.findChild(QtWidgets.QScrollArea, "scrollArea")
         self.scrollArea.hide()
@@ -38,29 +40,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setSelectionsButton.hide()
 
         self.confirmButton = self.findChild(QtWidgets.QPushButton, "confirmButton")
-        self.confirmButton.clicked.connect(self.save_pdf)
+        self.confirmButton.clicked.connect(self.ask_sign)
         self.confirmButton.hide()
-        self.cancelButton = self.findChild(QtWidgets.QPushButton, "cancelButton")
-        self.cancelButton.clicked.connect(self.reset)
-        self.cancelButton.hide()
-
-        self.clearShortcut = QtWidgets.QShortcut(QtGui.QKeySequence("Ctrl+L"), self)
-        self.clearShortcut.activated.connect(self.ask_sign)
+        self.saveButton = self.findChild(QtWidgets.QPushButton, "saveButton")
+        self.saveButton.clicked.connect(self.save_pdf)
+        self.saveButton.hide()
 
         self.show()
-
-    def set_sign_areas(self):
-        self.pdfViewerWidget.trigger_selection()
-        if self.setSelectionsButton.text() != "Confirm sign points":
-            self.setSelectionsButton.setText("Confirm sign points")
-        else:
-            self.setSelectionsButton.setText("Set sign points")
-
-    def save_pdf(self):
-        pass
-
-    def reset(self):
-        pass
 
     def load_document(self, path: str):
         if path == "":
@@ -68,6 +54,7 @@ class MainWindow(QtWidgets.QMainWindow):
             if path == "":
                 return
         if os.path.isfile(path):
+            self.pdf_path = path
             mtypes = mimetypes.guess_type(path)
             if mtypes and 'application/pdf' in mtypes:
                 self.imageLabel.hide()
@@ -77,12 +64,43 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.scrollArea.show()
                 self.setSelectionsButton.show()
 
+    def set_sign_areas(self):
+        self.pdfViewerWidget.trigger_selection()
+        if self.setSelectionsButton.text() != "Confirm sign points":
+            self.setSelectionsButton.setText("Confirm sign points")
+            self.confirmButton.hide()
+        else:
+            self.setSelectionsButton.setText("Set sign points")
+            self.confirmButton.show()
+
     def ask_sign(self):
         self.signWidget.show()
 
-    def show_sign(self, pixmap: QtGui.QPixmap):
-        self.imageLabel.setPixmap(pixmap)
+    def insert_signature(self, sign: QtGui.QPixmap):
+        self.pdfViewerWidget.print_signature(sign)
+        self.confirmButton.hide()
+        self.setSelectionsButton.hide()
+        self.saveButton.show()
 
+    def save_pdf(self):
+        images = self.pdfViewerWidget.get_pages_images()
+        files = []
+        pages = []
+        for idx, image in enumerate(images):
+            image: QtGui.QImage
+            buffer = QtCore.QBuffer()
+            buffer.open(QtCore.QBuffer.ReadWrite)
+            image.save(buffer, "PNG")
+            files.append(Image.open(io.BytesIO(buffer.data())))
+            # asd.append(f"tmp/{idx}.png")
+        # images = [Image.open(f) for f in files]
+        for idx, image in enumerate(files):
+            pages.append(image.convert("RGB"))
+        path = Path(self.pdf_path)
+        path = f"{path.parent}/" + path.stem + "_signed" + path.suffix
+        pages[0].save(path, "PDF", resolution=100.0, save_all=True, append_images=pages[1:])
+        success_message_box(f"Successfully saved signed PDF!\n"
+                            f"Check the original PDF folder:\n {path}")
 
 class SignWidget(QtWidgets.QWidget):
     update = QtCore.pyqtSignal(QtGui.QPixmap, name="event")
@@ -103,11 +121,11 @@ class SignWidget(QtWidgets.QWidget):
         self.cancelButton.clicked.connect(self.close)
 
     def confirm_sign(self):
-        signPixmap = QtGui.QPixmap(self.graphicsView.viewport().size())
-        pixmap = QtGui.QPixmap(signPixmap.size())
+        sign_pixmap = QtGui.QPixmap(self.graphicsView.viewport().size())
+        pixmap = QtGui.QPixmap(sign_pixmap.size())
         pixmap.fill(Qt.transparent)
-        self.graphicsView.viewport().render(signPixmap)
-        mask = signPixmap.createMaskFromColor(Qt.black, Qt.MaskOutColor)
+        self.graphicsView.viewport().render(sign_pixmap)
+        mask = sign_pixmap.createMaskFromColor(Qt.black, Qt.MaskOutColor)
         painter = QtGui.QPainter(pixmap)
         painter.setPen(Qt.black)
         painter.drawPixmap(pixmap.rect(), mask, mask.rect())
@@ -123,7 +141,7 @@ class GraphicsScene(QtWidgets.QGraphicsScene):
 
         self.lastMousePosition = None
         self.redBrush = QtGui.QBrush(Qt.red)
-        self.blackPen = QtGui.QPen(Qt.black)
+        self.blackPen = QtGui.QPen(Qt.black, 5.0)
 
         self.clearShortcut = QtWidgets.QShortcut(QtGui.QKeySequence("Ctrl+D"), parent)
         self.clearShortcut.activated.connect(self.clear)
@@ -150,7 +168,7 @@ class DragAndDropLabel(QtWidgets.QLabel):
     def __init__(self, image_path: str):
         super(DragAndDropLabel, self).__init__()
         self.setAcceptDrops(True)
-        self.setAlignment(Qt.AlignHCenter)
+        self.setAlignment(Qt.AlignHCenter | Qt.AlignVCenter)
         pixmap = QtGui.QPixmap(image_path)
         self.setPixmap(pixmap.scaledToWidth(100, Qt.SmoothTransformation))
 
@@ -192,6 +210,21 @@ class PdfViewerWidget(QtWidgets.QWidget):
             scene = gview.scene
             scene.trigger_selection()
 
+    def print_signature(self, signature: QtGui.QPixmap):
+        for gview in self.findChildren(PageGraphicsView):
+            gview.scene.print_signature(signature)
+
+    def get_pages_images(self):
+        pages = []
+        for gview in self.findChildren(PageGraphicsView):
+            gview: PageGraphicsView
+            image = QtGui.QImage(gview.scene.sceneRect().size().toSize(), QtGui.QImage.Format_ARGB32)
+            image.fill(Qt.transparent)
+            painter = QtGui.QPainter(image)
+            gview.scene.render(painter)
+            pages.append(image)
+        return pages
+
 
 class PageGraphicsView(QtWidgets.QGraphicsView):
     def __init__(self, scene: QtWidgets.QGraphicsScene):
@@ -225,6 +258,7 @@ class PageGraphicsScene(QtWidgets.QGraphicsScene):
         # print(f"page: {self.page_number}, coord: {event.scenePos()}")
         if self.selectionFlag:
             self.mouse_origin = self.views()[0].mapFromScene(event.scenePos().toPoint())
+            print(self.mouse_origin)
             if self.rubberBand is None:
                 self.rubberBand = QtWidgets.QRubberBand(QtWidgets.QRubberBand.Rectangle, self.views()[0])
             else:
@@ -265,6 +299,26 @@ class PageGraphicsScene(QtWidgets.QGraphicsScene):
                 if isinstance(item, QtWidgets.QGraphicsRectItem):
                     self.removeItem(item)
             self.rect_fields.clear()
+
+    def print_signature(self, signature: QtGui.QPixmap):
+        for item in self.items():
+            if isinstance(item, QtWidgets.QGraphicsRectItem):
+                item: QtWidgets.QGraphicsRectItem
+                coords = item.rect().getCoords()
+                image = self.addPixmap(signature.scaledToWidth(item.rect().toRect().width(), Qt.SmoothTransformation))
+                rect_height = coords[3] - coords[1]
+                sign_height = image.boundingRect().toRect().height()
+                y = coords[1] - (sign_height//2) + (rect_height//2)
+                image.setPos(coords[0], y)
+                self.removeItem(item)
+
+
+def success_message_box(message: str):
+    dialog = QtWidgets.QMessageBox()
+    dialog.setIconPixmap(QtGui.QPixmap("assets/success.png").scaledToWidth(50, Qt.SmoothTransformation))
+    dialog.setText(message)
+    dialog.setStandardButtons(QtWidgets.QMessageBox.Ok)
+    dialog.exec_()
 
 
 def main():

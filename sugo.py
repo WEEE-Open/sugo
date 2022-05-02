@@ -102,6 +102,7 @@ class MainWindow(QtWidgets.QMainWindow):
         success_message_box(f"Successfully saved signed PDF!\n"
                             f"Check the original PDF folder:\n {path}")
 
+
 class SignWidget(QtWidgets.QWidget):
     update = QtCore.pyqtSignal(QtGui.QPixmap, name="event")
 
@@ -118,7 +119,7 @@ class SignWidget(QtWidgets.QWidget):
         self.confirmButton = self.findChild(QtWidgets.QPushButton, "confirmButton")
         self.confirmButton.clicked.connect(self.confirm_sign)
         self.cancelButton = self.findChild(QtWidgets.QPushButton, "cancelButton")
-        self.cancelButton.clicked.connect(self.close)
+        self.cancelButton.clicked.connect(self.clear_and_close)
 
     def confirm_sign(self):
         sign_pixmap = QtGui.QPixmap(self.graphicsView.viewport().size())
@@ -133,6 +134,9 @@ class SignWidget(QtWidgets.QWidget):
         self.update.emit(pixmap)
         self.close()
 
+    def clear_and_close(self):
+        self.scene.clear()
+        self.close()
 
 class GraphicsScene(QtWidgets.QGraphicsScene):
     def __init__(self, parent: SignWidget, rect: QtCore.QRect):

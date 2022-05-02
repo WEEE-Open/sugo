@@ -114,6 +114,7 @@ class SignWidget(QtWidgets.QWidget):
         self.graphicsView = self.findChild(QtWidgets.QGraphicsView, "graphicsView")
         self.scene = GraphicsScene(self, self.graphicsView.rect())
         self.graphicsView.setScene(self.scene)
+        self.graphicsView.setStyleSheet("background: white;")
 
         # setup buttons
         self.confirmButton = self.findChild(QtWidgets.QPushButton, "confirmButton")

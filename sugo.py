@@ -82,6 +82,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.signWidget.show()
 
     def insert_signature(self, sign: QtGui.QPixmap):
+        coords = self.pdfViewerWidget.save_last_sign_positions()
+        self.settings.setValue("lastSignPositions", coords)
         self.pdfViewerWidget.print_signature(sign)
         self.confirmButton.hide()
         self.setSelectionsButton.hide()
@@ -111,6 +113,8 @@ class MainWindow(QtWidgets.QMainWindow):
         if self.pdfViewerWidget is None:
             return
         coords = self.pdfViewerWidget.save_last_sign_positions()
+        if not coords:
+            return
         self.settings.setValue("lastSignPositions", coords)
 
 

@@ -19,6 +19,9 @@ class MainWindow(QtWidgets.QMainWindow):
         super(MainWindow, self).__init__()
         uic.loadUi("assets/main.ui", self)
         self.setAcceptDrops(True)
+        self.settings = QtCore.QSettings("WEEE-Open", "SUGO")
+        self.last_sing_positions = self.settings.value("lastSignPositions")
+        print(self.last_sing_positions)
         self.pdfViewerWidget = None
         self.virtualFiles = []
         self.pdf_path = None
@@ -59,9 +62,11 @@ class MainWindow(QtWidgets.QMainWindow):
             if mtypes and 'application/pdf' in mtypes:
                 self.imageLabel.hide()
                 self.promptLabel.hide()
-                self.pdfViewerWidget = PdfViewerWidget(path)
+                self.pdfViewerWidget = PdfViewerWidget(path, self.settings, self.last_sing_positions)
                 self.scrollArea.setWidget(self.pdfViewerWidget)
                 self.scrollArea.show()
+                if self.last_sing_positions is not None:
+                    self.confirmButton.show()
                 self.setSelectionsButton.show()
 
     def set_sign_areas(self):
@@ -102,6 +107,12 @@ class MainWindow(QtWidgets.QMainWindow):
         success_message_box(f"Successfully saved signed PDF!\n"
                             f"Check the original PDF folder:\n {path}")
 
+    def closeEvent(self, a0: QtGui.QCloseEvent) -> None:
+        if self.pdfViewerWidget is None:
+            return
+        coords = self.pdfViewerWidget.save_last_sign_positions()
+        self.settings.setValue("lastSignPositions", coords)
+
 
 class SignWidget(QtWidgets.QWidget):
     update = QtCore.pyqtSignal(QtGui.QPixmap, name="event")
@@ -138,6 +149,7 @@ class SignWidget(QtWidgets.QWidget):
     def clear_and_close(self):
         self.scene.clear()
         self.close()
+
 
 class GraphicsScene(QtWidgets.QGraphicsScene):
     def __init__(self, parent: SignWidget, rect: QtCore.QRect):
@@ -189,8 +201,9 @@ class DragAndDropLabel(QtWidgets.QLabel):
 
 
 class PdfViewerWidget(QtWidgets.QWidget):
-    def __init__(self, path: str):
+    def __init__(self, path: str, settings: QtCore.QSettings, last_sign_positions: list):
         super(PdfViewerWidget, self).__init__()
+        self.settings = settings
         self.mainLayout = QtWidgets.QVBoxLayout()
         self.pages = pdf2image.convert_from_path(path, 200)
         self.setSizePolicy(QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Minimum)
@@ -203,7 +216,7 @@ class PdfViewerWidget(QtWidgets.QWidget):
             page.save(virtual_file, 'PNG')
             virtual_file.seek(0)
             virtual_file = virtual_file.read()
-            scene = PageGraphicsScene(self, virtual_file, idx)
+            scene = PageGraphicsScene(self, virtual_file, idx, last_sign_positions)
             gview = PageGraphicsView(scene)
             self.mainLayout.addWidget(gview)
 
@@ -230,6 +243,13 @@ class PdfViewerWidget(QtWidgets.QWidget):
             pages.append(image)
         return pages
 
+    def save_last_sign_positions(self):
+        gviews = self.findChildren(PageGraphicsView)
+        coords = []
+        for gview in gviews:
+            coords += gview.scene.get_sign_positions()
+        return coords
+
 
 class PageGraphicsView(QtWidgets.QGraphicsView):
     def __init__(self, scene: QtWidgets.QGraphicsScene):
@@ -243,7 +263,7 @@ class PageGraphicsView(QtWidgets.QGraphicsView):
 
 
 class PageGraphicsScene(QtWidgets.QGraphicsScene):
-    def __init__(self, parent: QtWidgets.QWidget, image_bytes: bytes, page_number: int):
+    def __init__(self, parent: QtWidgets.QWidget, image_bytes: bytes, page_number: int, last_sign_positions: list):
         super(PageGraphicsScene, self).__init__()
         self.parent = parent
         self.image = QtGui.QImage()
@@ -258,6 +278,16 @@ class PageGraphicsScene(QtWidgets.QGraphicsScene):
         pixmap = QtGui.QPixmap(self.image)
         pixmap = QtWidgets.QGraphicsPixmapItem(pixmap.scaledToWidth(self.parent.width(), Qt.SmoothTransformation))
         self.addItem(pixmap)
+        if last_sign_positions is None:
+            return
+        for position in last_sign_positions:
+            page = position[0]
+            rect_points = position[1]
+            if page == self.page_number:
+                first_point = QtCore.QPointF(rect_points[0], rect_points[1])
+                last_point = QtCore.QPointF(rect_points[2], rect_points[3])
+                self.addRect(self.improved_rect(first_point, last_point),
+                             brush=QtGui.QBrush(QtGui.QColor(0x0, 0x98, 0x3A, 120)))
 
     def mousePressEvent(self, event: 'QGraphicsSceneMouseEvent') -> None:
         # print(f"page: {self.page_number}, coord: {event.scenePos()}")
@@ -316,6 +346,14 @@ class PageGraphicsScene(QtWidgets.QGraphicsScene):
                 y = coords[1] - (sign_height//2) + (rect_height//2)
                 image.setPos(coords[0], y)
                 self.removeItem(item)
+
+    def get_sign_positions(self):
+        coords = []
+        for item in self.items():
+            if isinstance(item, QtWidgets.QGraphicsRectItem):
+                item: QtWidgets.QGraphicsRectItem
+                coords.append([self.page_number, item.rect().getCoords()])
+        return coords
 
 
 def success_message_box(message: str):

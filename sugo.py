@@ -38,7 +38,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.scrollArea = self.findChild(QtWidgets.QScrollArea, "scrollArea")
         self.scrollArea.hide()
 
-        self.setSelectionsButton = self.findChild(QtWidgets.QPushButton, "setPointsButton")
+        self.setSelectionsButton = self.findChild(
+            QtWidgets.QPushButton, "setPointsButton"
+        )
         self.setSelectionsButton.clicked.connect(self.set_sign_areas)
         self.setSelectionsButton.hide()
 
@@ -53,16 +55,20 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def load_document(self, path: str):
         if path == "":
-            path = QtWidgets.QFileDialog.getOpenFileName(self, 'Open File', "~", "PDF (*.pdf)")[0]
+            path = QtWidgets.QFileDialog.getOpenFileName(
+                self, "Open File", "~", "PDF (*.pdf)"
+            )[0]
             if path == "":
                 return
         if os.path.isfile(path):
             self.pdf_path = path
             mtypes = mimetypes.guess_type(path)
-            if mtypes and 'application/pdf' in mtypes:
+            if mtypes and "application/pdf" in mtypes:
                 self.imageLabel.hide()
                 self.promptLabel.hide()
-                self.pdfViewerWidget = PdfViewerWidget(path, self.settings, self.last_sing_positions)
+                self.pdfViewerWidget = PdfViewerWidget(
+                    path, self.settings, self.last_sing_positions
+                )
                 self.scrollArea.setWidget(self.pdfViewerWidget)
                 self.scrollArea.show()
                 if self.last_sing_positions is not None:
@@ -105,9 +111,13 @@ class MainWindow(QtWidgets.QMainWindow):
             pages.append(image.convert("RGB"))
         path = Path(self.pdf_path)
         path = f"{path.parent}/" + path.stem + "_signed" + path.suffix
-        pages[0].save(path, "PDF", resolution=100.0, save_all=True, append_images=pages[1:])
-        success_message_box(f"Successfully saved signed PDF!\n"
-                            f"Check the original PDF folder:\n {path}")
+        pages[0].save(
+            path, "PDF", resolution=100.0, save_all=True, append_images=pages[1:]
+        )
+        success_message_box(
+            f"Successfully saved signed PDF!\n"
+            f"Check the original PDF folder:\n {path}"
+        )
 
     def closeEvent(self, a0: QtGui.QCloseEvent) -> None:
         if self.pdfViewerWidget is None:
@@ -143,7 +153,9 @@ class SignWidget(QtWidgets.QWidget):
         sign_pixmap = QtGui.QPixmap(bounding_rect.toRect().size())
         sign_pixmap.fill(Qt.transparent)
         pain = QtGui.QPainter(sign_pixmap)
-        self.graphicsView.scene().render(pain, QtCore.QRectF(sign_pixmap.rect()), bounding_rect)
+        self.graphicsView.scene().render(
+            pain, QtCore.QRectF(sign_pixmap.rect()), bounding_rect
+        )
         pain.end()  # no more pain, lol
         self.update.emit(sign_pixmap)
         self.close()
@@ -165,10 +177,10 @@ class GraphicsScene(QtWidgets.QGraphicsScene):
         self.clearShortcut = QtWidgets.QShortcut(QtGui.QKeySequence("Ctrl+D"), parent)
         self.clearShortcut.activated.connect(self.clear)
 
-    def mousePressEvent(self, event: 'QGraphicsSceneMouseEvent') -> None:
+    def mousePressEvent(self, event: "QGraphicsSceneMouseEvent") -> None:
         self.lastMousePosition = event.scenePos()
 
-    def mouseMoveEvent(self, event: 'QGraphicsSceneMouseEvent') -> None:
+    def mouseMoveEvent(self, event: "QGraphicsSceneMouseEvent") -> None:
         if self.lastMousePosition is None:
             return
 
@@ -177,7 +189,7 @@ class GraphicsScene(QtWidgets.QGraphicsScene):
             self.addLine(QtCore.QLineF(self.lastMousePosition, position), self.blackPen)
             self.lastMousePosition = position
 
-    def mouseReleaseEvent(self, event: 'QGraphicsSceneMouseEvent') -> None:
+    def mouseReleaseEvent(self, event: "QGraphicsSceneMouseEvent") -> None:
         self.lastMousePosition = None
 
 
@@ -203,7 +215,9 @@ class DragAndDropLabel(QtWidgets.QLabel):
 
 
 class PdfViewerWidget(QtWidgets.QWidget):
-    def __init__(self, path: str, settings: QtCore.QSettings, last_sign_positions: list):
+    def __init__(
+        self, path: str, settings: QtCore.QSettings, last_sign_positions: list
+    ):
         super(PdfViewerWidget, self).__init__()
         self.settings = settings
         self.mainLayout = QtWidgets.QVBoxLayout()
@@ -215,7 +229,7 @@ class PdfViewerWidget(QtWidgets.QWidget):
 
         for idx, page in enumerate(self.pages):
             virtual_file = io.BytesIO()
-            page.save(virtual_file, 'PNG')
+            page.save(virtual_file, "PNG")
             virtual_file.seek(0)
             virtual_file = virtual_file.read()
             scene = PageGraphicsScene(self, virtual_file, idx, last_sign_positions)
@@ -238,7 +252,9 @@ class PdfViewerWidget(QtWidgets.QWidget):
         pages = []
         for gview in self.findChildren(PageGraphicsView):
             gview: PageGraphicsView
-            image = QtGui.QImage(gview.scene.sceneRect().size().toSize(), QtGui.QImage.Format_ARGB32)
+            image = QtGui.QImage(
+                gview.scene.sceneRect().size().toSize(), QtGui.QImage.Format_ARGB32
+            )
             image.fill(Qt.transparent)
             painter = QtGui.QPainter(image)
             gview.scene.render(painter)
@@ -265,7 +281,13 @@ class PageGraphicsView(QtWidgets.QGraphicsView):
 
 
 class PageGraphicsScene(QtWidgets.QGraphicsScene):
-    def __init__(self, parent: QtWidgets.QWidget, image_bytes: bytes, page_number: int, last_sign_positions: list):
+    def __init__(
+        self,
+        parent: QtWidgets.QWidget,
+        image_bytes: bytes,
+        page_number: int,
+        last_sign_positions: list,
+    ):
         super(PageGraphicsScene, self).__init__()
         self.parent = parent
         self.image = QtGui.QImage()
@@ -278,7 +300,9 @@ class PageGraphicsScene(QtWidgets.QGraphicsScene):
 
         self.image.loadFromData(image_bytes)
         pixmap = QtGui.QPixmap(self.image)
-        pixmap = QtWidgets.QGraphicsPixmapItem(pixmap.scaledToWidth(self.parent.width(), Qt.SmoothTransformation))
+        pixmap = QtWidgets.QGraphicsPixmapItem(
+            pixmap.scaledToWidth(self.parent.width(), Qt.SmoothTransformation)
+        )
         self.addItem(pixmap)
         if last_sign_positions is None:
             return
@@ -288,36 +312,47 @@ class PageGraphicsScene(QtWidgets.QGraphicsScene):
             if page == self.page_number:
                 first_point = QtCore.QPointF(rect_points[0], rect_points[1])
                 last_point = QtCore.QPointF(rect_points[2], rect_points[3])
-                self.addRect(self.improved_rect(first_point, last_point),
-                             brush=QtGui.QBrush(QtGui.QColor(0x0, 0x98, 0x3A, 120)))
+                self.addRect(
+                    self.improved_rect(first_point, last_point),
+                    brush=QtGui.QBrush(QtGui.QColor(0x0, 0x98, 0x3A, 120)),
+                )
 
-    def mousePressEvent(self, event: 'QGraphicsSceneMouseEvent') -> None:
+    def mousePressEvent(self, event: "QGraphicsSceneMouseEvent") -> None:
         # print(f"page: {self.page_number}, coord: {event.scenePos()}")
         if self.selectionFlag:
             self.mouse_origin = self.views()[0].mapFromScene(event.scenePos().toPoint())
             print(self.mouse_origin)
             if self.rubberBand is None:
-                self.rubberBand = QtWidgets.QRubberBand(QtWidgets.QRubberBand.Rectangle, self.views()[0])
+                self.rubberBand = QtWidgets.QRubberBand(
+                    QtWidgets.QRubberBand.Rectangle, self.views()[0]
+                )
             else:
                 return
             self.rubberBand.setGeometry(QtCore.QRect(self.mouse_origin, QtCore.QSize()))
             self.rubberBand.show()
 
-    def mouseMoveEvent(self, event: 'QGraphicsSceneMouseEvent') -> None:
+    def mouseMoveEvent(self, event: "QGraphicsSceneMouseEvent") -> None:
         if self.selectionFlag and self.rubberBand is not None:
             self.mouse_end = self.views()[0].mapFromScene(event.scenePos().toPoint())
-            self.rubberBand.setGeometry(self.improved_rect(self.mouse_origin, self.mouse_end).toRect())
+            self.rubberBand.setGeometry(
+                self.improved_rect(self.mouse_origin, self.mouse_end).toRect()
+            )
 
-    def mouseReleaseEvent(self, event: 'QGraphicsSceneMouseEvent') -> None:
+    def mouseReleaseEvent(self, event: "QGraphicsSceneMouseEvent") -> None:
         if self.selectionFlag and self.rubberBand is not None:
             self.rubberBand.hide()
             self.rubberBand = None
             origin = self.views()[0].mapToScene(self.mouse_origin)
             end = self.views()[0].mapToScene(self.mouse_end)
-            self.rect_fields.append([self.page_number,
-                                     self.addRect(self.improved_rect(origin, end),
-                                                  brush=QtGui.QBrush(QtGui.QColor(0x0, 0x98, 0x3A, 120)))
-                                     ])
+            self.rect_fields.append(
+                [
+                    self.page_number,
+                    self.addRect(
+                        self.improved_rect(origin, end),
+                        brush=QtGui.QBrush(QtGui.QColor(0x0, 0x98, 0x3A, 120)),
+                    ),
+                ]
+            )
 
     @staticmethod
     def improved_rect(p1: QtCore.QPointF, p2: QtCore.QPointF):
@@ -326,7 +361,7 @@ class PageGraphicsScene(QtWidgets.QGraphicsScene):
         y_min = min(p1.y(), p2.y())
         y_max = max(p1.y(), p2.y())
         return QtCore.QRectF(QtCore.QPointF(x_min, y_min), QtCore.QPointF(x_max, y_max))
-    
+
     def trigger_selection(self):
         if self.selectionFlag:
             self.selectionFlag = False
@@ -342,10 +377,14 @@ class PageGraphicsScene(QtWidgets.QGraphicsScene):
             if isinstance(item, QtWidgets.QGraphicsRectItem):
                 item: QtWidgets.QGraphicsRectItem
                 coords = item.rect().getCoords()
-                image = self.addPixmap(signature.scaledToWidth(item.rect().toRect().width(), Qt.SmoothTransformation))
+                image = self.addPixmap(
+                    signature.scaledToWidth(
+                        item.rect().toRect().width(), Qt.SmoothTransformation
+                    )
+                )
                 rect_height = coords[3] - coords[1]
                 sign_height = image.boundingRect().toRect().height()
-                y = coords[1] - (sign_height//2) + (rect_height//2)
+                y = coords[1] - (sign_height // 2) + (rect_height // 2)
                 image.setPos(coords[0], y)
                 self.removeItem(item)
 
@@ -360,7 +399,9 @@ class PageGraphicsScene(QtWidgets.QGraphicsScene):
 
 def success_message_box(message: str):
     dialog = QtWidgets.QMessageBox()
-    dialog.setIconPixmap(QtGui.QPixmap("assets/success.png").scaledToWidth(50, Qt.SmoothTransformation))
+    dialog.setIconPixmap(
+        QtGui.QPixmap("assets/success.png").scaledToWidth(50, Qt.SmoothTransformation)
+    )
     dialog.setText(message)
     dialog.setStandardButtons(QtWidgets.QMessageBox.Ok)
     dialog.exec_()

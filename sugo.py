@@ -98,7 +98,7 @@ class MainWindow(QtWidgets.QMainWindow):
             buffer = QtCore.QBuffer()
             buffer.open(QtCore.QBuffer.ReadWrite)
             image.save(buffer, "PNG")
-            files.append(Image.open(io.BytesIO(buffer.data())))
+            files.append(Image.open(io.BytesIO(bytes(buffer.data()))))
             # asd.append(f"tmp/{idx}.png")
         # images = [Image.open(f) for f in files]
         for idx, image in enumerate(files):
@@ -138,16 +138,14 @@ class SignWidget(QtWidgets.QWidget):
         self.cancelButton.clicked.connect(self.clear_and_close)
 
     def confirm_sign(self):
-        sign_pixmap = QtGui.QPixmap(self.graphicsView.viewport().size())
-        pixmap = QtGui.QPixmap(sign_pixmap.size())
-        pixmap.fill(Qt.transparent)
-        self.graphicsView.viewport().render(sign_pixmap)
-        mask = sign_pixmap.createMaskFromColor(Qt.black, Qt.MaskOutColor)
-        painter = QtGui.QPainter(pixmap)
-        painter.setPen(Qt.black)
-        painter.drawPixmap(pixmap.rect(), mask, mask.rect())
-        painter.end()
-        self.update.emit(pixmap)
+        bounding_rect = self.graphicsView.scene().itemsBoundingRect()
+        self.graphicsView.scene().setSceneRect(bounding_rect)
+        sign_pixmap = QtGui.QPixmap(bounding_rect.toRect().size())
+        sign_pixmap.fill(Qt.transparent)
+        pain = QtGui.QPainter(sign_pixmap)
+        self.graphicsView.scene().render(pain, QtCore.QRectF(sign_pixmap.rect()), bounding_rect)
+        pain.end()  # no more pain, lol
+        self.update.emit(sign_pixmap)
         self.close()
 
     def clear_and_close(self):

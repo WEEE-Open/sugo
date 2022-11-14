@@ -21,37 +21,48 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setAcceptDrops(True)
         self.settings = QtCore.QSettings("WEEE-Open", "SUGO")
         self.last_sing_positions = self.settings.value("lastSignPositions")
-        print(self.last_sing_positions)
         self.pdfViewerWidget = None
         self.virtualFiles = []
         self.pdf_path = None
+
+        """ Defining menu actions """
+        self.actionNew = self.findChild(QtWidgets.QAction, "actionNew")
+        self.actionQuit = self.findChild(QtWidgets.QAction, "actionQuit")
+
+        """ Connecting menu actions """
+        self.actionNew.triggered.connect(self.new_session)
+        self.actionQuit.triggered.connect(self.close)
 
         self.promptLabel = self.findChild(QtWidgets.QLabel, "promptLabel")
 
         self.imageLabel = DragAndDropLabel("assets/upload.png")
         self.imageLabel.triggered.connect(self.load_document)
-        self.centralWidget().layout().insertWidget(1, self.imageLabel)
 
         self.signWidget = SignWidget()
         self.signWidget.update.connect(self.insert_signature)
 
         self.scrollArea = self.findChild(QtWidgets.QScrollArea, "scrollArea")
-        self.scrollArea.hide()
 
-        self.setSelectionsButton = self.findChild(
-            QtWidgets.QPushButton, "setPointsButton"
-        )
-        self.setSelectionsButton.clicked.connect(self.set_sign_areas)
-        self.setSelectionsButton.hide()
-
+        """ Defining buttons """
+        self.setSelectionsButton = self.findChild(QtWidgets.QPushButton, "setPointsButton")
         self.confirmButton = self.findChild(QtWidgets.QPushButton, "confirmButton")
-        self.confirmButton.clicked.connect(self.ask_sign)
-        self.confirmButton.hide()
         self.saveButton = self.findChild(QtWidgets.QPushButton, "saveButton")
+
+        """ Connecting buttons """
+        self.setSelectionsButton.clicked.connect(self.set_sign_areas)
+        self.confirmButton.clicked.connect(self.ask_sign)
         self.saveButton.clicked.connect(self.save_pdf)
-        self.saveButton.hide()
+
+        self.setup()
 
         self.show()
+
+    def setup(self):
+        self.centralWidget().layout().insertWidget(1, self.imageLabel)
+        self.confirmButton.hide()
+        self.saveButton.hide()
+        self.setSelectionsButton.hide()
+        self.scrollArea.hide()
 
     def load_document(self, path: str):
         if path == "":
@@ -118,6 +129,15 @@ class MainWindow(QtWidgets.QMainWindow):
             f"Successfully saved signed PDF!\n"
             f"Check the original PDF folder:\n {path}"
         )
+
+    def new_session(self):
+        self.imageLabel.show()
+        self.promptLabel.show()
+        self.scrollArea.hide()
+        self.confirmButton.hide()
+        self.setSelectionsButton.hide()
+        self.saveButton.hide()
+        self.pdfViewerWidget.deleteLater()
 
     def closeEvent(self, a0: QtGui.QCloseEvent) -> None:
         if self.pdfViewerWidget is None:
@@ -321,7 +341,6 @@ class PageGraphicsScene(QtWidgets.QGraphicsScene):
         # print(f"page: {self.page_number}, coord: {event.scenePos()}")
         if self.selectionFlag:
             self.mouse_origin = self.views()[0].mapFromScene(event.scenePos().toPoint())
-            print(self.mouse_origin)
             if self.rubberBand is None:
                 self.rubberBand = QtWidgets.QRubberBand(
                     QtWidgets.QRubberBand.Rectangle, self.views()[0]

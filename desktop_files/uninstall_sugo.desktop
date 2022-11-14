@@ -5,6 +5,6 @@ Name=Uninstall SUGO
 Comment=Sugo uninstaller
 Path=/opt/sugo
 Exec=/opt/sugo/UNINSTALL.sh
-Icon=/opt/sugo/assets/icon.png
+Icon=/opt/sugo/assets/logo.png
 Terminal=true
 Categories=System

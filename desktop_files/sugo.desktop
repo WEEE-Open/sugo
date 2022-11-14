@@ -5,6 +5,6 @@ Name=Sugo
 Comment=Compilatore di FMOD
 Path=/opt/sugo
 Exec=sh -c "source venv/bin/activate; python3 sugo.py"
-Icon=/opt/sugo/assets/icon.png
+Icon=/opt/sugo/assets/logo.png
 Terminal=false
 Categories=Accessories

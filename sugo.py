@@ -44,7 +44,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.scrollArea = self.findChild(QtWidgets.QScrollArea, "scrollArea")
 
         """ Defining buttons """
-        self.setSelectionsButton = self.findChild(QtWidgets.QPushButton, "setPointsButton")
+        self.setSelectionsButton = self.findChild(
+            QtWidgets.QPushButton, "setPointsButton"
+        )
         self.confirmButton = self.findChild(QtWidgets.QPushButton, "confirmButton")
         self.saveButton = self.findChild(QtWidgets.QPushButton, "saveButton")
 
